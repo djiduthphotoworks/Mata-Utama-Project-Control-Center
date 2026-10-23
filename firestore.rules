@@ -1,0 +1,126 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---- Fungsi bantu -------------------------------------------------------
+    // Nilai role di users/{uid}.role: admin_pusat | kepala_divisi | supervisor | tim_lapangan
+    function signedIn() { return request.auth != null; }
+    function me() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
+    function isActive() { return signedIn() && me().active == true; }
+    function hasRole(r) { return isActive() && me().role == r; }
+    function isAdmin() { return hasRole('admin_pusat'); }
+    function isHead()  { return hasRole('kepala_divisi'); }
+    function isSupervisor() { return hasRole('supervisor'); }
+    function isField() { return hasRole('tim_lapangan'); }
+    // Project Manager: melihat, berkomunikasi, dan memperbarui progres/foto hanya pada proyek yang ia pegang (assignedUsers).
+    function isPM() { return hasRole('project_manager'); }
+    function isStaff() { return isHead() || isSupervisor() || isField() || isPM(); }
+
+    function projectDoc(pid) { return get(/databases/$(database)/documents/projects/$(pid)).data; }
+    function isMember(pid) { return projectDoc(pid).get('assignedUsers', []).hasAny([request.auth.uid]); }
+    // Admin dan Kepala Divisi membaca semua proyek; supervisor/tim lapangan hanya yang ditugaskan.
+    function canReadProject(pid) { return isAdmin() || isHead() || (isStaff() && isMember(pid)); }
+    // Chat dan laporan: admin, atau anggota proyek dengan role aktif.
+    function isProjectParty(pid) { return isAdmin() || (isStaff() && isMember(pid)); }
+
+    function isPct(v) { return v is number && v >= 0 && v <= 100; }
+
+    // ---- Profil pengguna ----------------------------------------------------
+    // Dibuat/diubah Admin dari Console atau lingkungan tepercaya; pengguna hanya membaca dirinya.
+    match /users/{uid} {
+      allow read: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ---- Proyek -------------------------------------------------------------
+    match /projects/{projectId} {
+      allow read: if isAdmin() || isHead() ||
+        (isStaff() && resource.data.get('assignedUsers', []).hasAny([request.auth.uid]));
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || (isHead() &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['location', 'locationUpdatedAt', 'locationUpdatedBy', 'locationLog']));
+
+      // Lingkup pekerjaan: Admin atur bobot; Supervisor hanya mengubah progres aktual.
+      match /scopes/{scopeId} {
+        allow read: if canReadProject(projectId);
+        allow create, delete: if isAdmin();
+        allow update: if isAdmin() || ((isSupervisor() || isPM()) && isMember(projectId) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['actual', 'updatedAt', 'updatedBy']) &&
+          isPct(request.resource.data.actual));
+      }
+
+      // Laporan progres: hanya tambah (tidak bisa diubah/dihapus).
+      match /reports/{rid} {
+        allow read: if canReadProject(projectId);
+        allow create: if (isAdmin() || ((isSupervisor() || isField() || isPM()) && isMember(projectId))) &&
+          request.resource.data.by == request.auth.uid && isPct(request.resource.data.value);
+        allow update, delete: if false;
+      }
+
+      // Riwayat lokasi (location_history): hanya tambah.
+      match /location_history/{lid} {
+        allow read: if canReadProject(projectId);
+        allow create: if (isAdmin() || isHead()) && request.resource.data.by == request.auth.uid;
+        allow update, delete: if false;
+      }
+
+      // Foto bukti pekerjaan (data URL terkompres): admin atau anggota lapangan menambah; hapus oleh admin atau pengunggah.
+      match /photos/{phid} {
+        allow read: if canReadProject(projectId);
+        allow create: if (isAdmin() || ((isSupervisor() || isField() || isPM()) && isMember(projectId))) &&
+          request.resource.data.by == request.auth.uid &&
+          request.resource.data.dataUrl is string && request.resource.data.dataUrl.size() <= 300000 &&
+          request.resource.data.taskId is string;
+        allow update: if false;
+        allow delete: if isAdmin() || resource.data.by == request.auth.uid;
+      }
+
+      // Komunikasi proyek: hanya tambah, pengirim harus diri sendiri.
+      match /chats/{mid} {
+        allow read: if isProjectParty(projectId);
+        allow create: if isProjectParty(projectId) &&
+          request.resource.data.senderId == request.auth.uid &&
+          request.resource.data.text is string &&
+          request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 2000;
+        allow update, delete: if false;
+      }
+    }
+
+    // ---- Notifikasi ---------------------------------------------------------
+    match /notifications/{nid} {
+      allow read: if signedIn() && isActive() && (isAdmin() || resource.data.toUid == request.auth.uid);
+      allow create, delete: if isAdmin();
+      allow update: if isActive() && resource.data.toUid == request.auth.uid &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+    }
+
+    // ---- Pesan langsung Admin <-> staf (tidak terkait proyek) ----------------
+    // threadId = UID staf. Staf hanya membaca/menulis percakapannya sendiri; Admin semua. Hanya tambah.
+    match /direct_messages/{mid} {
+      allow read: if isAdmin() || (isStaff() && resource.data.threadId == request.auth.uid);
+      allow create: if (isAdmin() || (isStaff() && request.resource.data.threadId == request.auth.uid)) &&
+        request.resource.data.senderId == request.auth.uid &&
+        request.resource.data.threadId is string &&
+        request.resource.data.text is string && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 2000;
+      allow update, delete: if false;
+    }
+
+    // ---- Pengumuman (untuk semua proyek) ------------------------------------
+    // Admin membuat/mengubah/menyematkan/menghapus kapan saja; role aktif lain hanya membaca.
+    match /announcements/{aid} {
+      function validAnn() {
+        let d = request.resource.data;
+        return d.title is string && d.title.size() > 0 && d.title.size() <= 120 &&
+          d.body is string && d.body.size() > 0 && d.body.size() <= 2000 &&
+          d.type in ['info', 'penting', 'mendesak'] && d.pinned is bool;
+      }
+      allow read: if isAdmin() || isStaff();
+      allow create, update: if isAdmin() && validAnn();
+      allow delete: if isAdmin();
+    }
+
+    // Default-deny untuk semua yang belum didefinisikan.
+    match /{document=**} { allow read, write: if false; }
+  }
+}
