@@ -618,9 +618,12 @@
     ] }
   };
 
+  /* Titik tingkat kota untuk peta publik (dibulatkan 1 desimal; bukan alamat persis). */
+  const PUB_CITIES = [['Jakarta', -6.2, 106.8], ['Bogor', -6.6, 106.8], ['Depok', -6.4, 106.8], ['Tangerang', -6.2, 106.6], ['Bekasi', -6.2, 107.0], ['Bandung', -6.9, 107.6], ['Cirebon', -6.7, 108.6], ['Semarang', -7.0, 110.4], ['Yogyakarta', -7.8, 110.4], ['Solo', -7.6, 110.8], ['Surabaya', -7.3, 112.7], ['Malang', -8.0, 112.6], ['Denpasar', -8.7, 115.2], ['Mataram', -8.6, 116.1], ['Kupang', -10.2, 123.6], ['Medan', 3.6, 98.7], ['Banda Aceh', 5.6, 95.3], ['Pekanbaru', 0.5, 101.4], ['Padang', -0.9, 100.4], ['Batam', 1.1, 104.0], ['Palembang', -3.0, 104.8], ['Jambi', -1.6, 103.6], ['Bandar Lampung', -5.4, 105.3], ['Bengkulu', -3.8, 102.3], ['Pontianak', -0.0, 109.3], ['Banjarmasin', -3.3, 114.6], ['Balikpapan', -1.2, 116.8], ['Samarinda', -0.5, 117.2], ['Palangka Raya', -2.2, 113.9], ['Makassar', -5.1, 119.4], ['Manado', 1.5, 124.8], ['Palu', -0.9, 119.9], ['Kendari', -4.0, 122.5], ['Gorontalo', 0.5, 123.1], ['Ambon', -3.7, 128.2], ['Ternate', 0.8, 127.4], ['Jayapura', -2.5, 140.7], ['Sorong', -0.9, 131.3], ['Manokwari', -0.9, 134.1]];
+
   function openProjectForm(id) {
     const editing = id ? Store.project(id) : null;
-    const v = editing || { code: Store.nextCode(), name: '', client: '', description: '', location: '', lat: '', lng: '', dashboardUrl: '', pm: '', supervisor: '', startDate: toISODate(new Date()), endDate: '', budget: '', status: 'Perencanaan', notes: '' };
+    const v = editing || { code: Store.nextCode(), name: '', client: '', description: '', location: '', lat: '', lng: '', dashboardUrl: '', pm: '', supervisor: '', startDate: toISODate(new Date()), endDate: '', budget: '', status: 'Perencanaan', notes: '', pubShow: false, pubName: '', pubCity: '', pubLat: '', pubLng: '' };
     const pms = [...new Set(Store.projects().map(p => p.pm))].sort();
     const pmAccounts = state.live ? (state.users || []).filter(u => u.roleCode === 'project_manager' && (u.active || u.id === v.pmUid)) : [];
     const body = `
@@ -651,6 +654,17 @@
         ${fieldHTML({ id: 'endDate', label: 'Target tanggal selesai', type: 'date', required: true, value: v.endDate })}
         ${fieldHTML({ id: 'budget', label: 'Anggaran proyek (Rp, opsional)', type: 'number', value: v.budget ?? '', attrs: 'min="0" step="1000" inputmode="numeric"' })}
         ${editing ? '' : fieldHTML({ id: 'template', label: 'Scope awal', tag: 'select', value: 'kosong', options: Object.entries(SCOPE_TEMPLATES).map(([k, t]) => ({ value: k, label: t.label })), hint: 'Bobot template hanya contoh ilustrasi, bukan standar. Bobot final harus disepakati berdasarkan BOQ/RAB.' })}
+        ${state.live ? `<fieldset class="field full pub-box" style="border:1px solid var(--border,#d8dee9);border-radius:10px;padding:12px 14px;margin:0">
+          <legend style="padding:0 6px;font-weight:600">Peta publik website (opsional)</legend>
+          <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="f-pubShow" name="pubShow" ${v.pubShow ? 'checked' : ''}> Tampilkan proyek ini di peta publik</label>
+          <div class="hint">Yang tampil ke publik hanya: nama tampilan, kota, status (Perencanaan / Sedang berjalan / Selesai), dan titik di tingkat kota. Klien, progres, anggaran, foto, chat, dan alamat persis tidak pernah dipublikasikan. Pastikan kontrak klien mengizinkan.</div>
+          <div class="form-grid" style="margin-top:8px">
+            ${fieldHTML({ id: 'pubName', label: 'Nama tampilan publik', value: v.pubName || '', full: true, attrs: 'maxlength="80" placeholder="mis. Renovasi Gerai Ritel — Bandung"' })}
+            <div class="field"><label for="f-pubCity">Kota</label><input class="input" id="f-pubCity" name="pubCity" value="${esc(v.pubCity || '')}" list="pubCityList" maxlength="60" autocomplete="off" placeholder="mis. Bandung">
+              <datalist id="pubCityList">${PUB_CITIES.map(c => `<option value="${esc(c[0])}">`).join('')}</datalist><div class="field-error" id="e-pubCity" role="alert"></div></div>
+            ${fieldHTML({ id: 'pubLat', label: 'Latitude kota', value: v.pubLat ?? '', attrs: 'inputmode="decimal"', hint: 'Terisi otomatis dari kota; dibulatkan 1 desimal (±11 km).' })}
+            ${fieldHTML({ id: 'pubLng', label: 'Longitude kota', value: v.pubLng ?? '', attrs: 'inputmode="decimal"' })}
+          </div></fieldset>` : ''}
         ${fieldHTML({ id: 'notes', label: 'Catatan tambahan', tag: 'textarea', value: v.notes, full: true, attrs: 'maxlength="600"' })}
       </div>
     </form>`;
@@ -658,7 +672,9 @@
       title: editing ? `Edit Proyek — ${editing.code}` : 'Tambah Proyek', body, wide: true,
       actions: [{ label: 'Batal', close: true }, { label: editing ? 'Simpan Perubahan' : 'Simpan', kind: 'primary', submit: true }],
       onSubmit: form => submitProjectForm(form, editing),
-      onOpen: wrap => { const b = $('#autoCode', wrap); if (b) b.addEventListener('click', () => { $('#f-code', wrap).value = Store.nextCode(); }); }
+      onOpen: wrap => {
+        const pc = $('#f-pubCity', wrap); if (pc) pc.addEventListener('change', () => { const c = PUB_CITIES.find(x => x[0].toLowerCase() === pc.value.trim().toLowerCase()); if (c) { pc.value = c[0]; $('#f-pubLat', wrap).value = c[1]; $('#f-pubLng', wrap).value = c[2]; } });
+        const b = $('#autoCode', wrap); if (b) b.addEventListener('click', () => { $('#f-code', wrap).value = Store.nextCode(); }); }
     });
   }
 
@@ -673,12 +689,25 @@
       else d.pm = '';
     }
     const errors = validateProject(d, editing && editing.id);
+    let pub = null;
+    if (state.live && form.elements.pubShow) {
+      const show = form.elements.pubShow.checked, city = (d.pubCity || '').trim(), nm = (d.pubName || '').trim();
+      let la = d.pubLat === '' ? NaN : Number(d.pubLat), ln = d.pubLng === '' ? NaN : Number(d.pubLng);
+      if (!isFinite(la) || !isFinite(ln)) { const c = PUB_CITIES.find(x => x[0].toLowerCase() === city.toLowerCase()); if (c) { la = c[1]; ln = c[2]; } }
+      if (show) {
+        if (!nm) errors.pubName = 'Nama tampilan wajib diisi bila ditampilkan di peta publik.';
+        if (!city) errors.pubCity = 'Kota wajib diisi.';
+        if (!isFinite(la) || !isFinite(ln)) errors.pubLat = 'Isi koordinat kota (atau pilih kota dari daftar).';
+        else if (la < -12 || la > 7 || ln < 94 || ln > 142) errors.pubLat = 'Koordinat di luar wilayah Indonesia.';
+      }
+      pub = { pubShow: show, pubName: nm, pubCity: city, pubLat: isFinite(la) ? Math.round(la * 10) / 10 : null, pubLng: isFinite(ln) ? Math.round(ln * 10) / 10 : null };
+    }
     if (!Validate.show(form, errors)) return;
     const clean = {
       code: d.code, name: d.name, client: d.client, description: d.description, location: d.location,
       lat: d.lat === '' ? null : Number(d.lat), lng: d.lng === '' ? null : Number(d.lng), dashboardUrl: d.dashboardUrl || '',
       pm: d.pm, ...(state.live ? { pmUid } : {}), supervisor: d.supervisor, startDate: d.startDate, endDate: d.endDate,
-      budget: d.budget === '' ? null : Number(d.budget), status: d.status, notes: d.notes
+      budget: d.budget === '' ? null : Number(d.budget), status: d.status, notes: d.notes, ...(pub || {})
     };
     if (editing) {
       const statusChanged = editing.status !== clean.status;
@@ -2678,10 +2707,22 @@
       return JSON.parse(JSON.stringify(o));
     },
     scopeFields(s) { return JSON.parse(JSON.stringify({ name: s.name, weight: Number(s.weight) || 0, actual: Number(s.actual) || 0, note: s.note || '', category: s.category || '', week: s.week == null ? null : Number(s.week), schedule: s.schedule || '', volume: s.volume == null ? null : Number(s.volume), unit: s.unit || '' })); },
+    /* Salinan terbatas untuk peta publik; hanya dikirim bila isinya berubah. */
+    pubDoc(p) {
+      if (!p.pubShow || !p.pubName || !p.pubCity || p.pubLat == null || p.pubLng == null) return null;
+      return { name: String(p.pubName).slice(0, 80), city: String(p.pubCity).slice(0, 60), status: p.status === 'Selesai' ? 'Selesai' : p.status === 'Perencanaan' ? 'Perencanaan' : 'Sedang berjalan', lat: Number(p.pubLat), lng: Number(p.pubLng) };
+    },
+    pubOps(p, ops, W) {
+      const want = Live.pubDoc(p), had = Live.snap.pub && Live.snap.pub[p.id] || null;
+      if (JSON.stringify(want) === JSON.stringify(had)) return;
+      if (want) ops.push(() => W.service.setPublicProject(p.id, want));
+      else if (had) ops.push(() => W.service.deletePublicProject(p.id));
+    },
     takeSnap() {
       const pr = {};
       state.projects.forEach(p => { const sc = {}; p.scope.forEach(s => { sc[s.id] = Live.scopeFields(s); }); pr[p.id] = { f: Live.projFields(p), sc }; });
-      Live.snap = { pr, msgs: state.messages.length, notifs: state.notifications.length };
+      const pub = {}; state.projects.forEach(p => { const d = Live.pubDoc(p); if (d) pub[p.id] = d; });
+      Live.snap = { pub, pr, msgs: state.messages.length, notifs: state.notifications.length };
     },
     persist() { Live.saveRead(); clearTimeout(Live.pt); Live.pt = setTimeout(() => { Live.q = Live.q.then(() => Live.doPersist()).catch(() => {}); }, 700); },
     async doPersist() {
@@ -2691,6 +2732,7 @@
         seen.add(p.id);
         const cur = Live.projFields(p), curSc = {}; p.scope.forEach(s => { curSc[s.id] = Live.scopeFields(s); });
         const old = Live.snap.pr[p.id];
+        if (W.role === 'admin_pusat') Live.pubOps(p, ops, W);
         if (!old) { ops.push(() => W.service.createProject(p.id, cur, p.scope.map((s, i) => Object.assign({ id: s.id, order: i }, curSc[s.id])), W.uid)); return; }
         let fields = {}; Object.keys(cur).forEach(k => { if (JSON.stringify(cur[k]) !== JSON.stringify(old.f[k])) fields[k] = cur[k]; });
         /* Rules: hanya admin yang menulis dokumen proyek; kepala divisi hanya field lokasi. */
@@ -2714,7 +2756,7 @@
         });
         if (Object.keys(fields).length || up.length || del.length) ops.push(() => W.service.updateProject(p.id, fields, up, del, W.uid, W.role === 'admin_pusat'));
       });
-      Object.keys(Live.snap.pr).forEach(id => { if (!seen.has(id)) ops.push(() => W.service.deleteProjectCascade(id)); });
+      Object.keys(Live.snap.pr).forEach(id => { if (!seen.has(id)) { ops.push(() => W.service.deleteProjectCascade(id)); if (Live.snap.pub && Live.snap.pub[id]) ops.push(() => W.service.deletePublicProject(id)); } });
       if (!ops.length) return;
       try {
         for (const run of ops) await run();
@@ -2748,6 +2790,7 @@
       status: STATUSES.includes(d.status) ? d.status : 'Perencanaan', notes: d.notes || '',
       createdAt: (d.createdAt && typeof d.createdAt.toDate === 'function') ? d.createdAt.toDate().toISOString() : (d.createdAt || new Date().toISOString()),
       demo: false, dashboardUrl: d.dashboardUrl || '',
+      pubShow: d.pubShow === true, pubName: d.pubName || '', pubCity: d.pubCity || '', pubLat: numOrNull(d.pubLat), pubLng: numOrNull(d.pubLng),
       scope: (Array.isArray(d.scopes) ? d.scopes : []).slice().sort((x, y) => (x.order ?? 1e9) - (y.order ?? 1e9)).map(s => ({ id: s.id, name: s.name || '(tanpa nama)', weight: Number(s.weight) || 0, actual: Number(s.actual) || 0, note: s.note || '', category: s.category || '', week: s.week == null ? null : Number(s.week), schedule: s.schedule || '', volume: s.volume == null ? null : Number(s.volume), unit: s.unit || '' })),
       assignedUsers: Array.isArray(d.assignedUsers) ? d.assignedUsers : [],
       certified: d.certified || null, milestones: Array.isArray(d.milestones) ? d.milestones : [],
