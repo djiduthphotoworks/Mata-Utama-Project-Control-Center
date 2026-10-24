@@ -1430,7 +1430,7 @@
           </div>
         </section>
         <section class="card"><div class="card-head"><h3>Detail Lokasi — ${esc(p.name)}</h3>${statusBadge(p.status)}</div><div class="card-body stack">
-          <dl class="meta-grid" style="margin-top:0"><div><dt>Kode Proyek</dt><dd>${esc(p.code)}</dd></div><div><dt>Alamat</dt><dd>${esc(p.location || 'Belum diisi')}</dd></div><div><dt>Koordinat</dt><dd>${has ? `${p.lat}, ${p.lng}` : 'Belum diisi'}</dd></div><div><dt>Verifikasi</dt><dd><span class="badge warn">Belum terverifikasi${p.demo ? ' (demo)' : ''}</span></dd></div></dl>
+          <dl class="meta-grid" style="margin-top:0"><div><dt>Kode Proyek</dt><dd>${esc(p.code)}</dd></div><div><dt>Alamat</dt><dd>${esc(p.location || 'Belum diisi')}</dd></div><div><dt>Koordinat</dt><dd>${has ? `${p.lat}, ${p.lng}` : 'Belum diisi'}</dd></div></dl>
           ${has ? `<div class="page-actions"><a class="btn" href="${osm}" target="_blank" rel="noopener noreferrer">${icon('external', 'sm')} Buka di OpenStreetMap</a></div>` : ''}
         </div></section>
       </div>`);
@@ -1451,10 +1451,10 @@
   Views.map = function () {
     if (!Store.project(ui.map.sel)) ui.map.sel = (Store.projects()[0] || {}).id || null;
     setMain(`
-    <div class="page-head"><div><h2>Peta Proyek</h2><p>Lokasi seluruh proyek pada peta OpenStreetMap. ${state.live ? 'Koordinat berasal dari data proyek di Firestore dan <b>belum terverifikasi</b>.' : 'Koordinat yang tersimpan adalah data demo dan <b>belum terverifikasi</b>.'}</p></div></div>
+    <div class="page-head"><div><h2>Peta Proyek</h2><p>Lokasi seluruh proyek pada peta OpenStreetMap. ${state.live ? 'Penanda mengikuti koordinat yang diisi pada data proyek.' : 'Koordinat yang tersimpan adalah data demo.'}</p></div></div>
     <div class="map-layout">
       <section class="card"><div class="card-head"><h3>Daftar Proyek (${Store.projects().length})</h3></div><div class="map-list" id="mapList" style="margin-top:10px"></div></section>
-      <div class="stack"><section class="card"><div class="card-head"><h3>Peta Lokasi Proyek <span class="badge warn plain">Koordinat belum terverifikasi</span></h3></div>
+      <div class="stack"><section class="card"><div class="card-head"><h3>Peta Lokasi Proyek</h3></div>
           <div class="card-body map-canvas"><div class="map-host" id="mapCanvas"></div><div id="mapInfo"></div></div></section>
         <section class="card" id="mapDetail"></section></div>
     </div>`);
@@ -1497,7 +1497,7 @@
       mapView.inst.select(ui.map.sel, { center: centerOnSel });
     }
     $('#mapInfo').innerHTML = `<div class="chart-legend" style="margin-top:10px">${STATUSES.map(s => `<span><i style="background:${STATUS_COLOR[s]}"></i>${s}</span>`).join('')}</div>
-    <p class="small muted" style="margin-top:8px">Penanda mengikuti koordinat latitude/longitude yang tersimpan di mockup (data demo) dan <b>belum terverifikasi</b>. Ubin peta dimuat dari OpenStreetMap lewat internet; tidak memerlukan kunci API.${window.PCCMap ? '' : ' <b>map.js tidak termuat, sehingga hanya diagram sebaran yang ditampilkan.</b>'}${noXY.length ? ` Tanpa koordinat (tidak tampil di peta): ${noXY.map(p => esc(p.code)).join(', ')}.` : ''}</p>`;
+    <p class="small muted" style="margin-top:8px">Penanda mengikuti koordinat latitude/longitude yang diisi pada data proyek. Ubin peta dimuat dari OpenStreetMap lewat internet; tidak memerlukan kunci API.${window.PCCMap ? '' : ' <b>map.js tidak termuat, sehingga hanya diagram sebaran yang ditampilkan.</b>'}${noXY.length ? ` Tanpa koordinat (tidak tampil di peta): ${noXY.map(p => esc(p.code)).join(', ')}.` : ''}</p>`;
   }
 
   /* Cadangan bila map.js tidak termuat: diagram sebaran, bukan peta. */
@@ -1534,7 +1534,7 @@
       <dl class="meta-grid" style="margin-top:0">
         <div><dt>Kode</dt><dd>${esc(sel.code)}</dd></div><div><dt>Alamat</dt><dd>${esc(sel.location || 'Belum diisi')}</dd></div>
         <div><dt>Koordinat</dt><dd>${has ? `${sel.lat}, ${sel.lng}` : 'Belum diisi'}</dd></div>
-        <div><dt>Verifikasi</dt><dd><span class="badge warn">Belum terverifikasi${sel.demo ? ' (demo)' : ''}</span></dd></div></dl>
+        </dl>
       <div>${progressCell(sel)}</div>
       <div class="page-actions">
         <button class="btn primary" type="button" data-action="change-location" data-id="${sel.id}">${icon('edit')} Ubah Lokasi</button>
