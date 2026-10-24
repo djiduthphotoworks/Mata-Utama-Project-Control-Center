@@ -11,7 +11,7 @@
      <iframe src="https://djiduthphotoworks.github.io/Mata-Utama-Project-Control-Center/peta-publik.html" width="100%" height="520" style="border:0" loading="lazy" title="Peta proyek"></iframe>
      Layar TV kantor: tambahkan ?tv=1 pada alamat (mode penuh, gelap, berputar otomatis). -->
 <div class="pp">
-  <header class="pp-head"><img src="assets/logo.png" alt="" onerror="this.remove()"><h1>Proyek Kami di Seluruh Indonesia</h1><span class="pp-stat" id="stat" aria-live="polite"></span></header>
+  <header class="pp-head"><img src="assets/logo.png" alt="" onerror="this.remove()"><h1>Proyek Kami di Seluruh Indonesia</h1><button type="button" class="pp-mode" id="mode" aria-pressed="false">Satelit</button><span class="pp-stat" id="stat" aria-live="polite"></span></header>
   <div class="pp-body"><div id="map"></div><ol class="pp-list" id="list" aria-label="Daftar proyek"></ol></div>
   <div class="pp-legend"><span><i class="chip" style="background:#16a34a"></i>Sedang berjalan</span><span><i class="chip" style="background:#2563eb"></i>Selesai</span><span><i class="chip" style="background:#f59e0b"></i>Perencanaan</span></div>
 </div>
@@ -23,13 +23,24 @@ const q = new URLSearchParams(location.search), TV = q.get('tv') === '1';
 if (TV) document.body.classList.add('tv');
 const COLOR = { 'Sedang berjalan': '#16a34a', 'Selesai': '#2563eb', 'Perencanaan': '#f59e0b' };
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const map = PCCMap.create(document.getElementById('map'), { center: { lat: -2.5, lng: 118 }, zoom: TV ? 5 : 4, onSelect: id => focus(id) });
+const SAT = { tileUrl: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', attribution: 'Imagery © Esri, Maxar, Earthstar Geographics, GIS User Community' };
+let sat = q.get('mode') ? q.get('mode') === 'sat' : TV, map = null;
+function build() {
+  if (map) map.destroy();
+  const host = document.getElementById('map');
+  map = PCCMap.create(host, Object.assign({ center: { lat: -2.5, lng: 118 }, zoom: TV ? 5 : 4, onSelect: id => focus(id) }, sat ? SAT : {}));
+  document.body.classList.toggle('sat', sat);
+  const b = document.getElementById('mode'); b.textContent = sat ? 'Peta' : 'Satelit'; b.setAttribute('aria-pressed', String(sat));
+  fitted = false;
+}
+document.getElementById('mode').onclick = () => { sat = !sat; build(); render(); };
 let items = [], idx = -1, timer = 0, fitted = false;
+build();
 function render() {
   const run = items.filter(i => i.status === 'Sedang berjalan').length, done = items.filter(i => i.status === 'Selesai').length;
   const cities = new Set(items.map(i => i.city)).size;
   document.getElementById('stat').textContent = items.length ? `${items.length} proyek · ${cities} kota · ${run} berjalan · ${done} selesai` : '';
-  map.setMarkers(items.map(i => ({ id: i.id, lat: i.lat, lng: i.lng, name: `${i.name} — ${i.city}`, label: TV ? i.city : '', status: i.status, color: COLOR[i.status] || '#2563eb' })));
+  map.setMarkers(items.map(i => ({ id: i.id, lat: i.lat, lng: i.lng, name: `${i.name} — ${i.city}`, label: (TV || sat) ? i.city : '', status: i.status, color: COLOR[i.status] || '#2563eb' })));
   if (!fitted && items.length) { map.fitAll(); fitted = true; }
   document.getElementById('list').innerHTML = items.map(i => `<li data-id="${esc(i.id)}"><b><i class="chip" style="background:${COLOR[i.status] || '#2563eb'}"></i>${esc(i.name)}</b><span>${esc(i.city)} · ${esc(i.status)}</span></li>`).join('');
   document.querySelectorAll('#list li').forEach(li => li.onclick = () => focus(li.dataset.id));
