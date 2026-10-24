@@ -270,3 +270,13 @@ export function subscribeDirect(role, uid, onData, onError) {
 export async function sendDirect(msg) {
     await addDoc(collection(db, "direct_messages"), { ...clean(msg), createdAt: serverTimestamp() });
 }
+
+
+/** Peta publik: salinan terbatas proyek (nama tampilan, kota, status, titik kota). Hanya admin yang boleh menulis (Rules). */
+export async function setPublicProject(id, data) {
+    const { setDoc } = await import("https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js");
+    await setDoc(doc(db, "public_projects", id), { ...clean(data), updatedAt: serverTimestamp() });
+}
+export async function deletePublicProject(id) {
+    await deleteDoc(doc(db, "public_projects", id));
+}
