@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
-import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, signOut } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, GoogleAuthProvider, signInWithPopup, signOut, setPersistence, browserSessionPersistence } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
 import { getFirestore, doc, getDoc } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
 
@@ -13,6 +13,20 @@ const logoutBtn = document.getElementById("authLogoutBtn");
 const appLogoutBtn = document.getElementById("appLogoutBtn");
 const message = document.getElementById("authMessage");
 const dashboard = document.getElementById("app");
+
+/* Login setiap kali aplikasi dibuka di tab/jendela baru.
+   true  = sesi hanya hidup di tab itu (tab baru selalu mulai dari halaman login; muat ulang di tab yang sama tetap masuk).
+           Berguna untuk menguji peran berbeda: tiap tab bisa memakai akun sendiri.
+   false = sesi tersimpan di browser (tidak perlu login lagi sampai menekan Keluar). */
+const LOGIN_SETIAP_BUKA = true;
+const authReady = (async () => {
+  if (!LOGIN_SETIAP_BUKA) return;
+  try {
+    await setPersistence(auth, browserSessionPersistence);
+    if (!sessionStorage.getItem("pcc.sesi")) await signOut(auth); // tab baru: hapus sesi lama bila ada
+    sessionStorage.setItem("pcc.sesi", "1");
+  } catch (e) { console.warn("Pengaturan sesi login gagal:", e && e.code); }
+})();
 
 // Fail-closed: dashboard tidak ditampilkan sampai role diverifikasi dari Firestore.
 if (dashboard) dashboard.hidden = true;
@@ -92,6 +106,7 @@ form?.addEventListener("submit", async (event) => {
   const email = document.getElementById("authEmail").value.trim();
   const password = document.getElementById("authPassword").value;
   say("Memproses login…");
+  await authReady;
   try { const credential = await signInWithEmailAndPassword(auth, email, password); await completeLogin(credential.user); }
   catch (error) { say(friendlyError(error), "error"); }
 });
@@ -104,6 +119,8 @@ async function doLogout() { try { await signOut(auth); say("Anda sudah keluar.")
 logoutBtn?.addEventListener("click", doLogout);
 appLogoutBtn?.addEventListener("click", doLogout);
 onAuthStateChanged(auth, async (user) => {
+  await authReady;
+  if (user && auth.currentUser?.uid !== user.uid) return; // sesi lama sudah dihapus
   if (!user) { showGate(true); logoutBtn.hidden = true; if (appLogoutBtn) appLogoutBtn.hidden = true; say("Silakan masuk dengan akun yang sudah terdaftar."); return; }
   await completeLogin(user);
 });
