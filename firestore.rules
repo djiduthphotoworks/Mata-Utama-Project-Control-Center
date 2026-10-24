@@ -120,6 +120,24 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // ---- Peta publik (tanpa login) -------------------------------------------
+    // Hanya berisi data yang sengaja dipublikasikan admin: nama tampilan, kota, status, titik kota.
+    // Tidak boleh ada klien, progres, anggaran, foto, chat, atau alamat persis.
+    match /public_projects/{pid} {
+      function validPub() {
+        let d = request.resource.data;
+        return d.keys().hasOnly(['name', 'city', 'status', 'lat', 'lng', 'updatedAt']) &&
+          d.name is string && d.name.size() > 0 && d.name.size() <= 80 &&
+          d.city is string && d.city.size() > 0 && d.city.size() <= 60 &&
+          d.status in ['Perencanaan', 'Sedang berjalan', 'Selesai'] &&
+          d.lat is number && d.lat >= -12 && d.lat <= 7 &&
+          d.lng is number && d.lng >= 94 && d.lng <= 142;
+      }
+      allow read: if true;
+      allow create, update: if isAdmin() && validPub();
+      allow delete: if isAdmin();
+    }
+
     // Default-deny untuk semua yang belum didefinisikan.
     match /{document=**} { allow read, write: if false; }
   }
