@@ -2765,7 +2765,7 @@
         history.replaceState(null, '', state.projects.length === 1 ? `#/project/${state.projects[0].id}` : '#/projects');
       }
       const b = $('#modeBanner');
-      if (b) b.innerHTML = '<b>Terhubung ke Cloud Firestore.</b> Proyek, lingkup, progres, dan chat tersimpan ke server sesuai Rules. Notifikasi diturunkan dari aktivitas dan pesan baru; status baca disimpan di browser ini.';
+      if (b) { const bn = b.closest('.demo-banner'); if (bn) bn.style.display = 'none'; }
       const tag = $('.mock-tag'); if (tag) tag.textContent = 'FIRESTORE • LIVE';
       updateBadges();
       Router.render();
