@@ -56,4 +56,10 @@ body.tv .pcc-tag{font-size:18px;padding:4px 9px}
 body.tv .pcc-dot{width:26px;height:26px;left:-13px;top:-13px}
 body.tv .pcc-pin.is-selected .pcc-dot{width:36px;height:36px;left:-18px;top:-18px}
 body.tv .pcc-pin.is-selected .pcc-tag{font-size:22px}
-body.tv .pcc-tiles{filter:invert(.92) hue-rotate(180deg) brightness(.85) contrast(.9)}
+body.tv:not(.sat) .pcc-tiles{filter:invert(.92) hue-rotate(180deg) brightness(.85) contrast(.9)}
+
+.pp-mode{font:600 13px var(--font);padding:7px 14px;border:1px solid #cbd5e1;border-radius:8px;background:#fff;color:#0f172a;cursor:pointer}
+.pp-mode:hover{background:#f1f5f9}.pp-mode:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+body.tv .pp-mode{display:none}
+body.sat .pcc-tag{background:rgba(15,23,42,.82);color:#fff;border-color:rgba(255,255,255,.4)}
+body.sat .pcc-dot{box-shadow:0 0 0 2px #fff}
